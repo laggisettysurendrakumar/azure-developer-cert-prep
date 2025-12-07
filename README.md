@@ -1,2 +1,16 @@
 # azure-developer-cert-prep
-Comprehensive Azure certification prep covering AZ-900 and AZ-204. Includes topic-wise notes, hands-on labs, real-world examples, code samples, and practice questions. Learn Azure fundamentals to advanced developer concepts with structured study material and practical exercises.
+📘 Azure Certification Preparation (AZ-900 + AZ-204)
+
+This repository contains complete preparation material for Azure Fundamentals (AZ-900) and Azure Developer Associate (AZ-204) certifications. It includes:
+
+  Topic-wise notes for AZ-900 & AZ-204
+  
+  Hands-on lab exercises covering major Azure services
+  
+  Real-world examples and implementation code
+  
+  Practice questions & scenarios
+  
+  Reference architectures, deployment samples, and cheat sheets
+
+A one-stop resource for learning Azure from basics to advanced developer topics.
