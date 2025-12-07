@@ -1,0 +1,228 @@
+Build a .NET Console App with Azure Cosmos DB (Create DB, Container, Insert & Read Items)
+
+In this walkthrough, we’ll build a .NET console application that:
+Connects to Azure Cosmos DB for NoSQL
+Creates a database (if it doesn’t exist)
+Creates a container (if it doesn’t exist)
+Inserts sample data
+Reads the data back and prints the total record count
+
+We’ll also see how to get the endpoint URL and keys from the Azure Portal.
+
+🔎 Note: The .NET SDK can create databases and containers, but the Cosmos DB account itself is usually created via the Azure Portal, CLI, Bicep, ARM, etc. 
+Microsoft Learn
+
+1. Prerequisites
+    An Azure subscription
+    An Azure Cosmos DB for NoSQL account
+    .NET 6 or later installed on your machine 
+    Azure Docs
+    Basic C#/.NET knowledge
+
+2. Create an Azure Cosmos DB Account (Portal)
+
+    If you already have an account, you can skip to section 3.
+    Go to the Azure Portal: https://portal.azure.com 
+    In the search bar at the top, type “Azure Cosmos DB” and select it.
+    Click ➕ Create.
+    Choose “Azure Cosmos DB for NoSQL”.
+
+In the Basics tab:
+
+    Select Subscription
+    Select or create a Resource group
+    Enter a unique Account Name (e.g., my-cosmos-demo)
+    Choose a Region (e.g., Central India)
+    Leave the defaults for now (you can enable Free Tier if eligible).    
+    Click Review + Create → Create.
+    Wait for deployment, then click “Go to resource”. 
+
+3. Get Endpoint & Keys from Azure Portal
+
+    We’ll use these values in our .NET app to connect.
+    Open your Cosmos DB account in the portal.
+    In the left menu, go to Keys (sometimes under Settings).
+
+    Note down:
+    URI (also called Endpoint) — e.g. https://my-cosmos-demo.documents.azure.com:443/
+    Primary Key (or a Read/Write key)
+    (Optional) Primary Connection String
+    We’ll use URI + Primary Key in this example.
+    ⚠️ In real projects, store these in Key Vault, environment variables, or user secrets, not hard-coded in code.
+    
+4. Create a .NET Console Project
+
+    Open a terminal / PowerShell:
+    dotnet new console -n CosmosDbConsoleDemo
+    cd CosmosDbConsoleDemo
+
+5. Add the Azure Cosmos DB .NET SDK
+
+    Add the NuGet package:
+    dotnet add package Microsoft.Azure.Cosmos
+    This uses the Azure Cosmos DB .NET SDK for the NoSQL API. 
+
+6. Define a Simple Model Class
+
+    Create a file TodoItem.cs:
+    public class TodoItem
+    {
+        public string id { get; set; } = Guid.NewGuid().ToString();
+        public string Title { get; set; }
+        public string Status { get; set; }   // e.g. "New", "InProgress", "Done"
+        public string Category { get; set; } // Used as partition key
+    }
+    
+    We’ll use /Category as the partition key path for the container.
+
+7. Implement Program.cs
+
+    Replace the contents of Program.cs with:
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Microsoft.Azure.Cosmos;
+    
+    internal class Program
+    {
+        // TODO: Replace these with your values from Azure Portal
+        private static readonly string endpointUri = "https://<your-account-name>.documents.azure.com:443/";
+        private static readonly string primaryKey  = "<your-primary-key>";
+    
+        private const string DatabaseId  = "DemoDatabase";
+        private const string ContainerId = "TodoItems";
+        private const string PartitionKeyPath = "/Category";
+    
+        private static async Task Main(string[] args)
+        {
+            Console.WriteLine("Azure Cosmos DB .NET Console Demo");
+            Console.WriteLine("Connecting...");
+    
+            // Create the Cosmos client
+            using CosmosClient client = new CosmosClient(endpointUri, primaryKey);
+    
+            // 1. Create database (if it doesn’t exist)
+            Database database = await client.CreateDatabaseIfNotExistsAsync(DatabaseId);
+            Console.WriteLine($"✅ Database ready: {database.Id}");
+    
+            // 2. Create container (if it doesn’t exist)
+            Container container = await database.CreateContainerIfNotExistsAsync(
+                id: ContainerId,
+                partitionKeyPath: PartitionKeyPath,
+                throughput: 400   // RU/s
+            );
+            Console.WriteLine($"✅ Container ready: {container.Id}");
+    
+            // 3. Insert sample data
+            Console.WriteLine("Inserting sample items...");
+            await InsertSampleItemsAsync(container);
+    
+            // 4. Read all items and show count
+            Console.WriteLine("Reading items back from container...");
+            List<TodoItem> items = await ReadAllItemsAsync(container);
+    
+            Console.WriteLine("📦 Items in container:");
+            foreach (var item in items)
+            {
+                Console.WriteLine($"- {item.id} | {item.Title} | {item.Status} | {item.Category}");
+            }
+    
+            Console.WriteLine($"\n✅ Total records in container: {items.Count}");
+        }
+    
+        private static async Task InsertSampleItemsAsync(Container container)
+        {
+            // Simple sample data
+            var todos = new List<TodoItem>
+            {
+                new TodoItem { Title = "Learn Azure Fundamentals", Status = "New",        Category = "Learning" },
+                new TodoItem { Title = "Build Cosmos DB console app", Status = "InProgress", Category = "Coding" },
+                new TodoItem { Title = "Prepare for AZ-900",          Status = "New",        Category = "Learning" },
+                new TodoItem { Title = "Prepare for AZ-204",          Status = "New",        Category = "Learning" },
+            };
+    
+            foreach (var todo in todos)
+            {
+                ItemResponse<TodoItem> response = await container.CreateItemAsync(
+                    item: todo,
+                    partitionKey: new PartitionKey(todo.Category)
+                );
+    
+                Console.WriteLine($"   Inserted item with id: {response.Resource.id}, RU charge: {response.RequestCharge}");
+            }
+        }
+    
+        private static async Task<List<TodoItem>> ReadAllItemsAsync(Container container)
+        {
+            var sqlQueryText = "SELECT * FROM c";
+    
+            QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
+            FeedIterator<TodoItem> queryResultSetIterator = container.GetItemQueryIterator<TodoItem>(queryDefinition);
+    
+            List<TodoItem> results = new List<TodoItem>();
+    
+            while (queryResultSetIterator.HasMoreResults)
+            {
+                FeedResponse<TodoItem> currentResultSet = await queryResultSetIterator.ReadNextAsync();
+                results.AddRange(currentResultSet);
+            }
+    
+            return results;
+        }
+    }
+    
+    What this code does
+    
+    Connects using endpoint URI + primary key
+    CreateDatabaseIfNotExistsAsync – creates DemoDatabase if missing
+    CreateContainerIfNotExistsAsync – creates TodoItems container with partition key /Category
+    Inserts 4 TodoItem documents
+    Queries all items with SELECT * FROM c and prints them
+    Shows total count using items.Count
+
+8. Run the App
+
+    From the project folder:
+    dotnet run
+    
+    You should see output like:
+    Azure Cosmos DB .NET Console Demo
+    Connecting...
+    ✅ Database ready: DemoDatabase
+    ✅ Container ready: TodoItems
+    Inserting sample items...
+       Inserted item with id: ... RU charge: 5.5
+       ...
+    Reading items back from container...
+    📦 Items in container:
+    - 0c9a... | Learn Azure Fundamentals | New | Learning
+    - ...
+    
+    ✅ Total records in container: 4
+
+9. Verify Data in Azure Portal (Data Explorer)
+
+    Go back to your Cosmos DB account in Azure Portal.
+    Open Data Explorer from the left menu. 
+
+Expand:
+
+Database: DemoDatabase
+Container: TodoItems
+Click Items – you should see the documents created by the console app.
+
+10. Where This Helps AZ-900 & AZ-204
+
+AZ-900 (Fundamentals)
+Understand what Cosmos DB is, basic concepts like accounts, databases, containers, items, partition keys, RU/s. 
+
+AZ-204 (Developer)
+Practice SDK usage, connecting securely, creating databases & containers, CRUD with .NET, and querying with SQL against Cosmos DB. 
+
+You can expand this console app by:
+Adding update and delete operations
+Using parameterized queries
+Moving secrets to environment variables or Azure Key Vault
+
+Adding logging and exception handling
