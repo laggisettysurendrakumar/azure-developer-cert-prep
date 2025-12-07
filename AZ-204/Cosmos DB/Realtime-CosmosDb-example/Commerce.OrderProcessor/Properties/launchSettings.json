@@ -2,7 +2,7 @@
   "profiles": {
     "Commerce_OrderProcessor": {
       "commandName": "Project",
-      "commandLineArgs": "--port 7022",
+      "commandLineArgs": "--port 7079",
       "launchBrowser": false
     }
   }

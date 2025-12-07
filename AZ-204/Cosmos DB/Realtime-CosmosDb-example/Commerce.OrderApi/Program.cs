@@ -1,44 +1,56 @@
+using Commerce.OrderApi.Config;
+using Commerce.OrderApi.Models;
+using Commerce.OrderApi.Repositories;
+using Commerce.OrderApi.Services;
+using Microsoft.Azure.Cosmos;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// Bind config
+builder.Services.Configure<CosmosDbConfig>(
+    builder.Configuration.GetSection("CosmosDb"));
+
+// CosmosClient
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+
+    return new CosmosClient(config.AccountEndpoint, config.AccountKey);
+});
+
+// Repositories
+builder.Services.AddSingleton<ICosmosRepository<Order>>(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+    var client = sp.GetRequiredService<CosmosClient>();
+    return new CosmosRepository<Order>(client, config.DatabaseId, config.OrdersContainerId);
+});
+
+builder.Services.AddSingleton<ICosmosRepository<InventoryItem>>(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+    var client = sp.GetRequiredService<CosmosClient>();
+    return new CosmosRepository<InventoryItem>(client, config.DatabaseId, config.InventoryContainerId);
+});
+
+// OrderService
+builder.Services.AddScoped<OrderService>();
+
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
