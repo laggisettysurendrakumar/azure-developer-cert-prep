@@ -1,0 +1,764 @@
+1. Article: Real-Time Order & Inventory System with Azure Cosmos DB and .NET
+
+1.1. Problem Statement (What we’re building)
+
+We’re designing a Real-Time Order & Inventory System for an e-commerce platform using:
+
+    ASP.NET Core Web API – to expose APIs for placing and querying orders
+    Azure Cosmos DB (NoSQL) – as the operational store for orders, inventory, and events
+    Azure Functions (Cosmos DB Change Feed) – to react to order changes in near real-time
+
+This solution is perfect to present as an 8+ years experience candidate because it covers:
+    * Data modeling & partitioning
+    * Concurrency (ETag) and transactional operations
+    * Event-driven architecture via Change Feed
+    * Scalability, resilience, and production considerations
+
+
+1.2. Architecture Overview
+
+Flow:
+
+1. Client (web/mobile/partner) calls **Order API** to place an order.
+2. **Order API**:
+   * Validates inventory for all SKUs
+   * Updates inventory (using ETag + TransactionalBatch per SKU)
+   * Creates the Order in Cosmos DB
+
+3. **Azure Cosmos DB (NoSQL)** stores:
+   * `Orders`
+   * `Inventory`
+   * `OrderEvents`
+
+4. **Cosmos DB Change Feed** on `Orders` triggers an **Azure Function**, which:
+   * Logs each change into `OrderEvents`
+   * (Optionally) pushes messages to Service Bus / sends notifications
+
+2. Step-by-Step Implementation
+
+Step 0 – Prerequisites
+
+* Azure Subscription
+* .NET 6/7/8 SDK
+* Visual Studio / VS Code
+* Azure Functions Core Tools (for local Functions)
+* Basic knowledge of:
+
+  * ASP.NET Core Web API
+  * Azure Cosmos DB
+  * Azure Functions
+
+
+Step 1 – GitHub Repo Structure
+
+We’ll use this as our final layout.
+
+```
+azure-cosmos-realtime-orders/
+│
+├─ README.md
+├─ CommerceSystem.sln
+│
+├─ src/
+│  ├─ Commerce.OrderApi/
+│  │  ├─ Commerce.OrderApi.csproj
+│  │  ├─ Program.cs
+│  │  ├─ appsettings.json
+│  │  ├─ Models/
+│  │  │  ├─ Order.cs
+│  │  │  ├─ OrderItem.cs
+│  │  │  ├─ InventoryItem.cs
+│  │  │  └─ OrderEvent.cs
+│  │  ├─ Config/
+│  │  │  └─ CosmosDbConfig.cs
+│  │  ├─ Repositories/
+│  │  │  ├─ ICosmosRepository.cs
+│  │  │  └─ CosmosRepository.cs
+│  │  ├─ Services/
+│  │  │  └─ OrderService.cs
+│  │  └─ Controllers/
+│  │     └─ OrdersController.cs
+│  │
+│  └─ Commerce.OrderProcessor/
+│     ├─ Commerce.OrderProcessor.csproj
+│     ├─ local.settings.json
+│     └─ Functions/
+│        └─ OrderChangeFeedFunction.cs
+│
+└─ docs/
+   ├─ architecture.md
+   ├─ api-contracts.md
+   └─ cosmos-design.md
+
+You can create these folders first or let them grow as you add code.
+
+
+Step 2 – Create Solution and Projects
+
+In your working folder:
+
+dotnet new sln -n CommerceSystem
+dotnet new webapi -n Commerce.OrderApi
+
+    Note: If your system doesn't have the azure lib setup then run the below command:
+   npm i -g azure-functions-core-tools@4 --unsafe-perm true
+   func --version  (Test it if it is installed properly)
+
+dotnet new func -n Commerce.OrderProcessor -lang C#  => if .NET 6 (or)
+func init Commerce.OrderProcessor --worker-runtime dotnet --target-framework net6.0  
+cd Commerce.OrderProcessor
+func new --template "Cosmos DB Trigger" --name OrderChangeFeedFunction
+
+dotnet sln CommerceSystem.sln add Commerce.OrderApi/Commerce.OrderApi.csproj
+dotnet sln CommerceSystem.sln add Commerce.OrderProcessor/Commerce.OrderProcessor.csproj
+```
+
+Add required NuGet packages:
+
+cd Commerce.OrderApi
+dotnet add package Microsoft.Azure.Cosmos
+dotnet add package Newtonsoft.Json
+cd ..
+
+cd Commerce.OrderProcessor
+dotnet add package Microsoft.Azure.WebJobs.Extensions.CosmosDB
+dotnet add package Microsoft.Azure.WebJobs.Extensions.Storage
+cd ..
+
+Step 3 – Create Cosmos DB Account & Containers (Portal)
+
+1. Go to **Azure Portal** → search **“Azure Cosmos DB”** → **+ Create**.
+2. Choose **“Azure Cosmos DB for NoSQL”**.
+3. Set:
+
+   * Subscription & Resource group
+   * Account name (e.g. `commerce-cosmos-demo`)
+   * Region
+4. Deploy. After completion → **Go to resource**.
+
+Then:
+
+1. Create **database**: `CommerceDb`
+2. Create containers:
+
+   * `Orders` with partition key `/customerId`
+   * `Inventory` with partition key `/skuId`
+   * `OrderEvents` with partition key `/orderId`
+
+Get connection info:
+
+* In the left menu, go to **Keys**:
+
+  * URI (Endpoint)
+  * PRIMARY KEY
+
+We’ll use these in our configs.
+
+
+Step 4 – Domain Models (Order, Inventory, Events)
+
+Create `Models/Order.cs`:
+
+```csharp
+namespace Commerce.OrderApi.Models;
+
+public class Order
+{
+    public string id { get; set; } = Guid.NewGuid().ToString();
+    public string customerId { get; set; }
+    public DateTime orderDate { get; set; } = DateTime.UtcNow;
+    public string status { get; set; } = "Created"; // Created, Paid, Shipped, Cancelled
+    public decimal totalAmount { get; set; }
+    public List<OrderItem> items { get; set; } = new();
+}
+
+public class OrderItem
+{
+    public string skuId { get; set; }
+    public int quantity { get; set; }
+    public decimal price { get; set; }
+}
+```
+
+Create `Models/InventoryItem.cs`:
+
+```csharp
+namespace Commerce.OrderApi.Models;
+
+public class InventoryItem
+{
+    public string id { get; set; }          // same as skuId
+    public string skuId { get; set; }
+    public int availableQuantity { get; set; }
+    public int reorderThreshold { get; set; } = 10;
+    public string warehouseLocation { get; set; }
+}
+```
+
+Create `Models/OrderEvent.cs` (for logging events):
+
+```csharp
+namespace Commerce.OrderApi.Models;
+
+public class OrderEvent
+{
+    public string id { get; set; } = Guid.NewGuid().ToString();
+    public string orderId { get; set; }
+    public string eventType { get; set; }   // Created, Paid, Shipped, etc.
+    public DateTime eventTime { get; set; } = DateTime.UtcNow;
+    public string description { get; set; }
+}
+```
+
+---
+
+Step 5 – Configuration for Cosmos DB
+
+Create `Config/CosmosDbConfig.cs`:
+
+```csharp
+namespace Commerce.OrderApi.Config;
+
+public class CosmosDbConfig
+{
+    public string AccountEndpoint { get; set; }
+    public string AccountKey { get; set; }
+    public string DatabaseId { get; set; }
+    public string OrdersContainerId { get; set; }
+    public string InventoryContainerId { get; set; }
+    public string OrderEventsContainerId { get; set; }
+}
+```
+
+Update `appsettings.json` in `Commerce.OrderApi`:
+
+```json
+{
+  "CosmosDb": {
+    "AccountEndpoint": "https://<your-account>.documents.azure.com:443/",
+    "AccountKey": "<your-primary-key>",
+    "DatabaseId": "CommerceDb",
+    "OrdersContainerId": "Orders",
+    "InventoryContainerId": "Inventory",
+    "OrderEventsContainerId": "OrderEvents"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+---
+
+### Step 6 – Register CosmosClient and Repositories (Program.cs)
+
+In `Program.cs`:
+
+```csharp
+using Commerce.OrderApi.Config;
+using Commerce.OrderApi.Models;
+using Commerce.OrderApi.Repositories;
+using Commerce.OrderApi.Services;
+using Microsoft.Azure.Cosmos;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Bind config
+builder.Services.Configure<CosmosDbConfig>(
+    builder.Configuration.GetSection("CosmosDb"));
+
+// CosmosClient
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+
+    return new CosmosClient(config.AccountEndpoint, config.AccountKey);
+});
+
+// Repositories
+builder.Services.AddSingleton<ICosmosRepository<Order>>(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+    var client = sp.GetRequiredService<CosmosClient>();
+    return new CosmosRepository<Order>(client, config.DatabaseId, config.OrdersContainerId);
+});
+
+builder.Services.AddSingleton<ICosmosRepository<InventoryItem>>(sp =>
+{
+    var config = sp.GetRequiredService<
+        Microsoft.Extensions.Options.IOptions<CosmosDbConfig>>().Value;
+    var client = sp.GetRequiredService<CosmosClient>();
+    return new CosmosRepository<InventoryItem>(client, config.DatabaseId, config.InventoryContainerId);
+});
+
+// OrderService
+builder.Services.AddScoped<OrderService>();
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapControllers();
+
+app.Run();
+```
+
+---
+
+### Step 7 – Repository Pattern for Cosmos
+
+Create `Repositories/ICosmosRepository.cs`:
+
+```csharp
+using Microsoft.Azure.Cosmos;
+namespace Commerce.OrderApi.Repositories;
+
+public interface ICosmosRepository<T> where T : class
+{
+    Task<T> AddAsync(T item, PartitionKey partitionKey);
+    Task<T> GetAsync(string id, PartitionKey partitionKey);
+    IAsyncEnumerable<T> QueryAsync(string query);
+}
+```
+
+Create `Repositories/CosmosRepository.cs`:
+
+```csharp
+using Microsoft.Azure.Cosmos;
+namespace Commerce.OrderApi.Repositories;
+public class CosmosRepository<T> : ICosmosRepository<T> where T : class
+{
+    private readonly Container _container;
+
+    public CosmosRepository(CosmosClient client, string databaseId, string containerId)
+    {
+        _container = client.GetContainer(databaseId, containerId);
+    }
+
+    public async Task<T> AddAsync(T item, PartitionKey partitionKey)
+    {
+        var response = await _container.CreateItemAsync(item, partitionKey);
+        return response.Resource;
+    }
+
+    public async Task<T> GetAsync(string id, PartitionKey partitionKey)
+    {
+        var response = await _container.ReadItemAsync<T>(id, partitionKey);
+        return response.Resource;
+    }
+
+    public async IAsyncEnumerable<T> QueryAsync(string query)
+    {
+        var iterator = _container.GetItemQueryIterator<T>(
+            new QueryDefinition(query));
+
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync();
+            foreach (var item in response)
+            {
+                yield return item;
+            }
+        }
+    }
+}
+```
+
+---
+
+### Step 8 – Business Logic with ETag + TransactionalBatch (OrderService)
+
+Create `Services/OrderService.cs`:
+
+```csharp
+using Commerce.OrderApi.Config;
+using Commerce.OrderApi.Models;
+using Commerce.OrderApi.Repositories;
+using Microsoft.Azure.Cosmos;
+
+namespace Commerce.OrderApi.Services;
+
+public class OrderService
+{
+    private readonly Container _ordersContainer;
+    private readonly Container _inventoryContainer;
+
+    public OrderService(CosmosClient client, CosmosDbConfig config)
+    {
+        _ordersContainer = client.GetContainer(config.DatabaseId, config.OrdersContainerId);
+        _inventoryContainer = client.GetContainer(config.DatabaseId, config.InventoryContainerId);
+    }
+
+    public async Task<Order> PlaceOrderAsync(Order order)
+    {
+        if (order == null || order.items == null || !order.items.Any())
+            throw new ArgumentException("Order must contain at least one item.");
+
+        // Group items by SKU
+        var itemsBySku = order.items.GroupBy(i => i.skuId);
+
+        // 1. Validate and update inventory per SKU using ETag + TransactionalBatch
+        foreach (var skuGroup in itemsBySku)
+        {
+            string skuId = skuGroup.Key;
+            int totalQtyRequested = skuGroup.Sum(i => i.quantity);
+
+            ItemResponse<InventoryItem> inventoryResponse =
+                await _inventoryContainer.ReadItemAsync<InventoryItem>(
+                    id: skuId,
+                    partitionKey: new PartitionKey(skuId));
+
+            InventoryItem inventory = inventoryResponse.Resource;
+            string etag = inventoryResponse.ETag;
+
+            if (inventory.availableQuantity < totalQtyRequested)
+            {
+                throw new InvalidOperationException(
+                    $"Insufficient stock for SKU {skuId}. Requested {totalQtyRequested}, available {inventory.availableQuantity}.");
+            }
+
+            inventory.availableQuantity -= totalQtyRequested;
+
+            var batch = _inventoryContainer.CreateTransactionalBatch(new PartitionKey(skuId));
+
+            batch.ReplaceItem(
+                inventory.id,
+                inventory,
+                new TransactionalBatchItemRequestOptions
+                {
+                    IfMatchEtag = etag // optimistic concurrency
+                });
+
+            var batchResponse = await batch.ExecuteAsync();
+
+            if (!batchResponse.IsSuccessStatusCode)
+            {
+                // In a real system: retry with backoff or surface proper error
+                throw new InvalidOperationException(
+                    $"Failed to update inventory for SKU {skuId}. Status: {batchResponse.StatusCode}");
+            }
+        }
+
+        // 2. All inventory updates OK, now create order
+        order.orderDate = DateTime.UtcNow;
+        order.status = "Created";
+        order.totalAmount = order.items.Sum(i => i.quantity * i.price);
+
+        var orderResponse = await _ordersContainer.CreateItemAsync(
+            order,
+            new PartitionKey(order.customerId));
+
+        return orderResponse.Resource;
+    }
+}
+```
+
+---
+
+### Step 9 – OrdersController to Expose API
+
+Create `Controllers/OrdersController.cs`:
+
+```csharp
+using Commerce.OrderApi.Models;
+using Commerce.OrderApi.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Commerce.OrderApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class OrdersController : ControllerBase
+{
+    private readonly OrderService _orderService;
+
+    public OrdersController(OrderService orderService)
+    {
+        _orderService = orderService;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> PlaceOrder([FromBody] Order order)
+    {
+        try
+        {
+            var result = await _orderService.PlaceOrderAsync(order);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
+}
+```
+
+Sample request body:
+
+```json
+{
+  "customerId": "CUST001",
+  "items": [
+    { "skuId": "SKU1001", "quantity": 2, "price": 250 },
+    { "skuId": "SKU2001", "quantity": 1, "price": 500 }
+  ]
+}
+```
+
+---
+
+### Step 10 – Azure Functions: Order Change Feed Processor
+
+In `Commerce.OrderProcessor`, create `Functions/OrderChangeFeedFunction.cs`:
+
+```csharp
+using System.Collections.Generic;
+using Microsoft.Azure.Documents;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
+
+namespace Commerce.OrderProcessor.Functions;
+
+public static class OrderChangeFeedFunction
+{
+    [FunctionName("OrderChangeFeedFunction")]
+    public static void Run(
+        [CosmosDBTrigger(
+            databaseName: "CommerceDb",
+            collectionName: "Orders",
+            ConnectionStringSetting = "CosmosDbConnection",
+            LeaseCollectionName = "leases",
+            CreateLeaseCollectionIfNotExists = true)]
+        IReadOnlyList<Document> input,
+        ILogger log)
+    {
+        if (input != null && input.Count > 0)
+        {
+            log.LogInformation($"Order change feed triggered with {input.Count} documents");
+
+            foreach (var doc in input)
+            {
+                var orderId = doc.Id;
+                var status = doc.GetPropertyValue<string>("status");
+                log.LogInformation($"Order {orderId} changed. Status: {status}");
+
+                // Here you can:
+                // - Write an OrderEvent to OrderEvents container
+                // - Send notification events, etc.
+            }
+        }
+    }
+}
+```
+
+Configure `local.settings.json`:
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "CosmosDbConnection": "AccountEndpoint=...;AccountKey=...;"
+  }
+}
+```
+
+---
+
+### Step 11 – Running & Testing Locally
+
+1. **Run Web API:**
+
+   ```bash
+   dotnet run --project src/Commerce.OrderApi
+   ```
+
+   Open Swagger at `https://localhost:<port>/swagger` or use Postman.
+
+2. **Seed Inventory Items:**
+
+   * Using Data Explorer in Cosmos Portal, insert documents into `Inventory` container like:
+
+     ```json
+     {
+       "id": "SKU1001",
+       "skuId": "SKU1001",
+       "availableQuantity": 50,
+       "reorderThreshold": 10,
+       "warehouseLocation": "HYD"
+     }
+     ```
+
+3. **Place an Order via POST** `/api/orders` with the body above.
+
+4. **Run Functions:**
+
+   ```bash
+   cd src/Commerce.OrderProcessor
+   func start
+   ```
+
+5. Watch logs of `OrderChangeFeedFunction` – you should see messages whenever an order is created/updated.
+
+---
+
+## 3. README.md Skeleton (Ready to Drop into Repo)
+
+Create `README.md` in repo root with this content and tweak as you like:
+
+````markdown
+# Real-Time Order & Inventory System with Azure Cosmos DB and .NET
+
+This repository contains a sample enterprise-style implementation of a **real-time order processing and inventory system** using:
+
+- **ASP.NET Core Web API** for order management
+- **Azure Cosmos DB (NoSQL)** as the operational data store
+- **Azure Functions (Cosmos DB Change Feed)** for event-driven processing
+
+---
+
+## Features
+
+- Place orders with basic stock validation
+- Real-time inventory updates per SKU
+- Cosmos DB containers for Orders, Inventory, and OrderEvents
+- Partitioning strategy designed for scalability
+- ETag-based optimistic concurrency control for inventory updates
+- Transactional batch operations within a partition
+- Change Feed–driven processing of order updates (Azure Functions)
+
+---
+
+## Architecture Overview
+
+**High-level flow:**
+
+1. Client calls **Order API** to place an order.
+2. Order API validates inventory and updates stock using **ETag + TransactionalBatch**.
+3. Order details are stored in the `Orders` container in **Azure Cosmos DB**.
+4. The **Cosmos DB Change Feed** on the `Orders` container triggers an **Azure Function**.
+5. The function logs order events and can publish notifications or integration events.
+
+---
+
+## Projects
+
+- `src/Commerce.OrderApi`  
+  ASP.NET Core Web API exposing endpoints to place and query orders.
+
+- `src/Commerce.OrderProcessor`  
+  Azure Functions project that listens to the Cosmos DB **Change Feed** on the `Orders` container and reacts to changes.
+
+---
+
+## Cosmos DB Design
+
+**Database:** `CommerceDb`
+
+**Containers:**
+
+- `Orders` – partition key: `/customerId`  
+  Stores order header and line items.
+
+- `Inventory` – partition key: `/skuId`  
+  Stores available quantity per SKU.
+
+- `OrderEvents` – partition key: `/orderId`  
+  Stores event history for each order (Created, Paid, Shipped, etc.).
+
+---
+
+## Getting Started
+
+### 1. Prerequisites
+
+- Azure subscription
+- .NET 6/7 SDK
+- Azure Functions Core Tools (for local Functions)
+- Azure Cosmos DB account (NoSQL API)
+
+### 2. Create Cosmos DB Resources
+
+1. Create an **Azure Cosmos DB for NoSQL** account.
+2. Create database `CommerceDb`.
+3. Create containers:
+   - `Orders` with partition key `/customerId`
+   - `Inventory` with partition key `/skuId`
+   - `OrderEvents` with partition key `/orderId`
+4. Copy the **AccountEndpoint** and **AccountKey** from the Keys blade in the portal.
+
+### 3. Configure the API
+
+Update `src/Commerce.OrderApi/appsettings.json`:
+
+```json
+"CosmosDb": {
+  "AccountEndpoint": "https://<your-account>.documents.azure.com:443/",
+  "AccountKey": "<your-primary-key>",
+  "DatabaseId": "CommerceDb",
+  "OrdersContainerId": "Orders",
+  "InventoryContainerId": "Inventory",
+  "OrderEventsContainerId": "OrderEvents"
+}
+````
+
+### 4. Configure the Functions
+
+Update `src/Commerce.OrderProcessor/local.settings.json`:
+
+```json
+"Values": {
+  "CosmosDbConnection": "AccountEndpoint=...;AccountKey=...;"
+}
+```
+
+### 5. Run the API
+
+```bash
+dotnet run --project src/Commerce.OrderApi
+```
+
+Use Swagger or Postman to call:
+
+* `POST /api/orders` – place an order
+
+### 6. Run the Functions
+
+```bash
+cd src/Commerce.OrderProcessor
+func start
+```
+
+When orders are created, the `OrderChangeFeedFunction` is triggered via the **Cosmos DB Change Feed**.
+
+---
+
+## Interview Talking Points
+
+* Data modeling and partition key selection for scalability.
+* ETag-based optimistic concurrency to avoid lost updates.
+* TransactionalBatch for atomic operations within a partition key.
+* Change Feed pattern for event-driven architecture.
+* RU (Request Unit) optimization and autoscale strategy.
+* Consistency levels and multi-region design.
+* Secret management via configuration / Key Vault in production.
+
