@@ -52,3 +52,7 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+AZ-204/Cosmos DB/CosmosDbConsoleDemo/.vs/CosmosDbConsoleDemo/DesignTimeBuild/.dtbcache.v2
+AZ-204/Cosmos DB/CosmosDbConsoleDemo/.vs/CosmosDbConsoleDemo/FileContentIndex/096dace7-4fb7-4737-be84-94b3da12f114.vsidx
+AZ-204/Cosmos DB/CosmosDbConsoleDemo/.vs/CosmosDbConsoleDemo/FileContentIndex/9de501e0-5a51-486a-a16d-2f6fedaf345b.vsidx
+AZ-204/Cosmos DB/CosmosDbConsoleDemo/.vs/CosmosDbConsoleDemo/v17/.suo
