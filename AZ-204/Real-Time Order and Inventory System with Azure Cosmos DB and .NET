@@ -104,10 +104,35 @@ dotnet new webapi -n Commerce.OrderApi
    npm i -g azure-functions-core-tools@4 --unsafe-perm true
    func --version  (Test it if it is installed properly)
 
-dotnet new func -n Commerce.OrderProcessor -lang C#  => if .NET 6 (or)
-func init Commerce.OrderProcessor --worker-runtime dotnet --target-framework net6.0  
+func init Commerce.OrderProcessor --worker-runtime dotnet-isolated --target-framework net8.0
+
+        This creates:
+        
+        Commerce.OrderProcessor/
+          Program.cs
+          Commerce.OrderProcessor.csproj
+          host.json
+          local.settings.json
+          ...
+
+Add Cosmos DB extension package (.NET 8 isolated)
+
+Go into the new project:
+
 cd Commerce.OrderProcessor
+
+
+Add the Cosmos DB extension for isolated worker: 
+Microsoft Learn
+
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.CosmosDB
+This enables [CosmosDBTrigger] in the isolated model.
+
+Create the Cosmos DB Trigger function (Orders change feed)
+
+Use Core Tools to scaffold a function:
 func new --template "Cosmos DB Trigger" --name OrderChangeFeedFunction
+If it shows a menu, choose the Cosmos DB trigger template by number.
 
 dotnet sln CommerceSystem.sln add Commerce.OrderApi/Commerce.OrderApi.csproj
 dotnet sln CommerceSystem.sln add Commerce.OrderProcessor/Commerce.OrderProcessor.csproj
@@ -258,7 +283,6 @@ Update `appsettings.json` in `Commerce.OrderApi`:
 
 In `Program.cs`:
 
-```csharp
 using Commerce.OrderApi.Config;
 using Commerce.OrderApi.Models;
 using Commerce.OrderApi.Repositories;
@@ -267,7 +291,7 @@ using Microsoft.Azure.Cosmos;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Bind config
+// Bind Cosmos config
 builder.Services.Configure<CosmosDbConfig>(
     builder.Configuration.GetSection("CosmosDb"));
 
@@ -280,7 +304,7 @@ builder.Services.AddSingleton(sp =>
     return new CosmosClient(config.AccountEndpoint, config.AccountKey);
 });
 
-// Repositories
+// Repos (if you still use generic repository)
 builder.Services.AddSingleton<ICosmosRepository<Order>>(sp =>
 {
     var config = sp.GetRequiredService<
@@ -297,7 +321,7 @@ builder.Services.AddSingleton<ICosmosRepository<InventoryItem>>(sp =>
     return new CosmosRepository<InventoryItem>(client, config.DatabaseId, config.InventoryContainerId);
 });
 
-// OrderService
+// Business service
 builder.Services.AddScoped<OrderService>();
 
 builder.Services.AddControllers();
@@ -315,7 +339,7 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 
 app.Run();
-```
+
 
 ---
 
@@ -394,14 +418,17 @@ namespace Commerce.OrderApi.Services;
 
 public class OrderService
 {
-    private readonly Container _ordersContainer;
-    private readonly Container _inventoryContainer;
+   private readonly Container _ordersContainer;
+private readonly Container _inventoryContainer;
 
-    public OrderService(CosmosClient client, CosmosDbConfig config)
-    {
-        _ordersContainer = client.GetContainer(config.DatabaseId, config.OrdersContainerId);
-        _inventoryContainer = client.GetContainer(config.DatabaseId, config.InventoryContainerId);
-    }
+public OrderService(CosmosClient client, IOptions<CosmosDbConfig> options)
+{
+    var config = options.Value;
+
+    _ordersContainer = client.GetContainer(config.DatabaseId, config.OrdersContainerId);
+    _inventoryContainer = client.GetContainer(config.DatabaseId, config.InventoryContainerId);
+}
+
 
     public async Task<Order> PlaceOrderAsync(Order order)
     {
@@ -529,58 +556,66 @@ Sample request body:
 
 In `Commerce.OrderProcessor`, create `Functions/OrderChangeFeedFunction.cs`:
 
-```csharp
 using System.Collections.Generic;
-using Microsoft.Azure.Documents;
-using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 
 namespace Commerce.OrderProcessor.Functions;
 
-public static class OrderChangeFeedFunction
+public class OrderDocument
 {
-    [FunctionName("OrderChangeFeedFunction")]
-    public static void Run(
+    public string id { get; set; } = default!;
+    public string customerId { get; set; } = default!;
+    public string status { get; set; } = default!;
+}
+
+public class OrderChangeFeedFunction
+{
+    private readonly ILogger _logger;
+
+    public OrderChangeFeedFunction(ILoggerFactory loggerFactory)
+    {
+        _logger = loggerFactory.CreateLogger<OrderChangeFeedFunction>();
+    }
+
+    [Function("OrderChangeFeedFunction")]
+    public void Run(
         [CosmosDBTrigger(
             databaseName: "CommerceDb",
-            collectionName: "Orders",
-            ConnectionStringSetting = "CosmosDbConnection",
-            LeaseCollectionName = "leases",
-            CreateLeaseCollectionIfNotExists = true)]
-        IReadOnlyList<Document> input,
-        ILogger log)
+            containerName: "Orders",
+            Connection = "CosmosDbConnection",
+            LeaseContainerName = "leases",
+            CreateLeaseContainerIfNotExists = true
+            )]
+        IReadOnlyList<OrderDocument> input)
     {
-        if (input != null && input.Count > 0)
+        if (input == null || input.Count == 0)
         {
-            log.LogInformation($"Order change feed triggered with {input.Count} documents");
+            return;
+        }
 
-            foreach (var doc in input)
-            {
-                var orderId = doc.Id;
-                var status = doc.GetPropertyValue<string>("status");
-                log.LogInformation($"Order {orderId} changed. Status: {status}");
+        _logger.LogInformation($"Order change feed triggered with {input.Count} documents");
 
-                // Here you can:
-                // - Write an OrderEvent to OrderEvents container
-                // - Send notification events, etc.
-            }
+        foreach (var doc in input)
+        {
+            _logger.LogInformation(
+                $"Order {doc.id} for customer {doc.customerId} changed. Status: {doc.status}");
         }
     }
 }
-```
+
+
 
 Configure `local.settings.json`:
 
-```json
 {
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
-    "CosmosDbConnection": "AccountEndpoint=...;AccountKey=...;"
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "CosmosDbConnection": "AccountEndpoint=XXXXXXXXXX;AccountKey=XXXXXXXXXXXXX;"
   }
 }
-```
 
 ---
 
