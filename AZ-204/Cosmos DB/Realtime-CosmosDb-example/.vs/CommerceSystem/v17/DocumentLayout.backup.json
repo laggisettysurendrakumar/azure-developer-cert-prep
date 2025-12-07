@@ -3,14 +3,6 @@
   "WorkspaceRootPath": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\services\\orderservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\services\\orderservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\commerce.orderapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
       "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\commerce.orderapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
     },
@@ -27,8 +19,16 @@
       "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\repositories\\cosmosrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\config\\cosmosdbconfig.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\config\\cosmosdbconfig.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\services\\orderservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|solutionrelative:commerce.orderapi\\services\\orderservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{0C43D555-9DB1-4A56-92AF-37A375657CC9}|Commerce.OrderApi\\Commerce.OrderApi.csproj|f:\\azure-developer-cert-prep\\az-204\\cosmos db\\realtime-cosmosdb-example\\commerce.orderapi\\controllers\\orderscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -62,8 +62,21 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 8,
+          "SelectedChildIndex": 7,
           "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "OrderChangeFeedFunction.cs",
+              "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
+              "RelativeDocumentMoniker": "Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
+              "ToolTip": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
+              "RelativeToolTip": "Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAzwCAAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-07T15:14:10.068Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
@@ -78,7 +91,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 2,
               "Title": "appsettings.json",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\appsettings.json",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\appsettings.json",
@@ -91,7 +104,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 3,
               "Title": "CosmosRepository.cs",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Repositories\\CosmosRepository.cs",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\Repositories\\CosmosRepository.cs",
@@ -103,20 +116,19 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 6,
               "Title": "OrderService.cs",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Services\\OrderService.cs",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\Services\\OrderService.cs",
               "ToolTip": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Services\\OrderService.cs",
               "RelativeToolTip": "Commerce.OrderApi\\Services\\OrderService.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAFAAAAAAAAAA==",
+              "ViewState": "AgIAAA8AAAAAAAAAAAAAABwAAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-12-07T14:09:10.548Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-12-07T14:09:10.548Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 0,
               "Title": "Commerce.OrderApi.csproj",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Commerce.OrderApi.csproj",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\Commerce.OrderApi.csproj",
@@ -129,7 +141,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 5,
               "Title": "CosmosDbConfig.cs",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Config\\CosmosDbConfig.cs",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\Config\\CosmosDbConfig.cs",
@@ -141,29 +153,15 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 4,
               "Title": "Program.cs",
               "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Program.cs",
               "RelativeDocumentMoniker": "Commerce.OrderApi\\Program.cs",
               "ToolTip": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderApi\\Program.cs",
               "RelativeToolTip": "Commerce.OrderApi\\Program.cs",
-              "ViewState": "AgIAABcAAAAAAAAAAAAqwCsAAAAhAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-12-07T14:05:51.944Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "OrderChangeFeedFunction.cs",
-              "DocumentMoniker": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
-              "RelativeDocumentMoniker": "Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
-              "ToolTip": "F:\\azure-developer-cert-prep\\AZ-204\\Cosmos DB\\Realtime-CosmosDb-example\\Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
-              "RelativeToolTip": "Commerce.OrderProcessor\\OrderChangeFeedFunction.cs",
-              "ViewState": "AgIAAAYAAAAAAAAAAAAzwCAAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-12-07T15:14:10.068Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-12-07T14:05:51.944Z"
             },
             {
               "$type": "Document",

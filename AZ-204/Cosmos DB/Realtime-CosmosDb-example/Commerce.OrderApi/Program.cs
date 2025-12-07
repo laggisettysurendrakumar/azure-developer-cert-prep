@@ -6,7 +6,7 @@ using Microsoft.Azure.Cosmos;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Bind config
+// Bind Cosmos config
 builder.Services.Configure<CosmosDbConfig>(
     builder.Configuration.GetSection("CosmosDb"));
 
@@ -19,7 +19,7 @@ builder.Services.AddSingleton(sp =>
     return new CosmosClient(config.AccountEndpoint, config.AccountKey);
 });
 
-// Repositories
+// Repos (if you still use generic repository)
 builder.Services.AddSingleton<ICosmosRepository<Order>>(sp =>
 {
     var config = sp.GetRequiredService<
@@ -36,7 +36,7 @@ builder.Services.AddSingleton<ICosmosRepository<InventoryItem>>(sp =>
     return new CosmosRepository<InventoryItem>(client, config.DatabaseId, config.InventoryContainerId);
 });
 
-// OrderService
+// Business service
 builder.Services.AddScoped<OrderService>();
 
 builder.Services.AddControllers();

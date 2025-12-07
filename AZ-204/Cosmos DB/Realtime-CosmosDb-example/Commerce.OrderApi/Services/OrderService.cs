@@ -2,6 +2,7 @@
 using Commerce.OrderApi.Models;
 using Commerce.OrderApi.Repositories;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Options;
 
 namespace Commerce.OrderApi.Services;
 
@@ -10,8 +11,10 @@ public class OrderService
     private readonly Container _ordersContainer;
     private readonly Container _inventoryContainer;
 
-    public OrderService(CosmosClient client, CosmosDbConfig config)
+    public OrderService(CosmosClient client, IOptions<CosmosDbConfig> options)
     {
+        var config = options.Value;
+
         _ordersContainer = client.GetContainer(config.DatabaseId, config.OrdersContainerId);
         _inventoryContainer = client.GetContainer(config.DatabaseId, config.InventoryContainerId);
     }
