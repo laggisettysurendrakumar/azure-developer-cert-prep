@@ -78,103 +78,115 @@ In the Basics tab:
 7. Implement Program.cs
 
     Replace the contents of Program.cs with:
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.Cosmos;
-    
-    internal class Program
+
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Threading.Tasks;
+using CosmosDbConsoleDemo;
+using Microsoft.Azure.Cosmos;
+using Container = Microsoft.Azure.Cosmos.Container;
+
+internal class Program
+{
+    // TODO: Replace these with your values from Azure Portal
+    private static readonly string endpointUri = "<Copy endpointUri from azure portal>";
+    private static readonly string primaryKey = "<Copy primaryKey from azure portal>";
+    private const string DatabaseId = "DemoDatabase";
+    private const string ContainerId = "TodoItems";
+    private const string PartitionKeyPath = "/Category";
+
+    private static async Task Main(string[] args)
     {
-        // TODO: Replace these with your values from Azure Portal
-        private static readonly string endpointUri = "https://<your-account-name>.documents.azure.com:443/";
-        private static readonly string primaryKey  = "<your-primary-key>";
-    
-        private const string DatabaseId  = "DemoDatabase";
-        private const string ContainerId = "TodoItems";
-        private const string PartitionKeyPath = "/Category";
-    
-        private static async Task Main(string[] args)
+        Console.WriteLine("Azure Cosmos DB .NET Console Demo");
+        Console.WriteLine("Connecting...");
+
+        // Create the Cosmos client
+        using CosmosClient client = new CosmosClient(endpointUri, primaryKey);
+
+        // 1. Create database (if it doesn’t exist)
+        Database database = await client.CreateDatabaseIfNotExistsAsync(DatabaseId);
+        Console.WriteLine($"✅ Database ready: {database.Id}");
+
+        // 2. Create container (if it doesn’t exist)
+        Container container = await database.CreateContainerIfNotExistsAsync(
+            id: ContainerId,
+            partitionKeyPath: PartitionKeyPath,
+            throughput: 400   // RU/s
+        );
+        Console.WriteLine($"✅ Container ready: {container.Id}");
+
+        // 3. Insert sample data
+        Console.WriteLine("Inserting sample items...");
+        await InsertSampleItemsAsync(container);
+
+        // 4. Read all items and show count
+        Console.WriteLine("Reading items back from container...");
+        List<TodoItem> items = await ReadAllItemsAsync(container);
+
+        Console.WriteLine("📦 Items in container:");
+        foreach (var item in items)
         {
-            Console.WriteLine("Azure Cosmos DB .NET Console Demo");
-            Console.WriteLine("Connecting...");
-    
-            // Create the Cosmos client
-            using CosmosClient client = new CosmosClient(endpointUri, primaryKey);
-    
-            // 1. Create database (if it doesn’t exist)
-            Database database = await client.CreateDatabaseIfNotExistsAsync(DatabaseId);
-            Console.WriteLine($"✅ Database ready: {database.Id}");
-    
-            // 2. Create container (if it doesn’t exist)
-            Container container = await database.CreateContainerIfNotExistsAsync(
-                id: ContainerId,
-                partitionKeyPath: PartitionKeyPath,
-                throughput: 400   // RU/s
-            );
-            Console.WriteLine($"✅ Container ready: {container.Id}");
-    
-            // 3. Insert sample data
-            Console.WriteLine("Inserting sample items...");
-            await InsertSampleItemsAsync(container);
-    
-            // 4. Read all items and show count
-            Console.WriteLine("Reading items back from container...");
-            List<TodoItem> items = await ReadAllItemsAsync(container);
-    
-            Console.WriteLine("📦 Items in container:");
-            foreach (var item in items)
-            {
-                Console.WriteLine($"- {item.id} | {item.Title} | {item.Status} | {item.Category}");
-            }
-    
-            Console.WriteLine($"\n✅ Total records in container: {items.Count}");
+            Console.WriteLine($"- {item.id} | {item.Title} | {item.Status} | {item.Category}");
         }
-    
-        private static async Task InsertSampleItemsAsync(Container container)
-        {
-            // Simple sample data
-            var todos = new List<TodoItem>
+
+        Console.WriteLine($"\n✅ Total records in container: {items.Count}");
+    }
+
+    private static async Task InsertSampleItemsAsync(Container container)
+    {
+        // Simple sample data
+        var todos = new List<TodoItem>
             {
                 new TodoItem { Title = "Learn Azure Fundamentals", Status = "New",        Category = "Learning" },
                 new TodoItem { Title = "Build Cosmos DB console app", Status = "InProgress", Category = "Coding" },
                 new TodoItem { Title = "Prepare for AZ-900",          Status = "New",        Category = "Learning" },
                 new TodoItem { Title = "Prepare for AZ-204",          Status = "New",        Category = "Learning" },
             };
-    
-            foreach (var todo in todos)
-            {
-                ItemResponse<TodoItem> response = await container.CreateItemAsync(
-                    item: todo,
-                    partitionKey: new PartitionKey(todo.Category)
-                );
-    
-                Console.WriteLine($"   Inserted item with id: {response.Resource.id}, RU charge: {response.RequestCharge}");
-            }
-        }
-    
-        private static async Task<List<TodoItem>> ReadAllItemsAsync(Container container)
+
+        foreach (var todo in todos)
         {
-            var sqlQueryText = "SELECT * FROM c";
-    
-            QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
-            FeedIterator<TodoItem> queryResultSetIterator = container.GetItemQueryIterator<TodoItem>(queryDefinition);
-    
-            List<TodoItem> results = new List<TodoItem>();
-    
-            while (queryResultSetIterator.HasMoreResults)
-            {
-                FeedResponse<TodoItem> currentResultSet = await queryResultSetIterator.ReadNextAsync();
-                results.AddRange(currentResultSet);
-            }
-    
-            return results;
+            ItemResponse<TodoItem> response = await container.CreateItemAsync(
+                item: todo,
+                partitionKey: new PartitionKey(todo.Category)
+            );
+
+            Console.WriteLine($"   Inserted item with id: {response.Resource.id}, RU charge: {response.RequestCharge}");
         }
     }
-    
+
+    private static async Task<List<TodoItem>> ReadAllItemsAsync(Container container)
+    {
+        var sqlQueryText = "SELECT * FROM c";
+
+        QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
+        FeedIterator<TodoItem> queryResultSetIterator = container.GetItemQueryIterator<TodoItem>(queryDefinition);
+
+        List<TodoItem> results = new List<TodoItem>();
+
+        while (queryResultSetIterator.HasMoreResults)
+        {
+            FeedResponse<TodoItem> currentResultSet = await queryResultSetIterator.ReadNextAsync();
+            results.AddRange(currentResultSet);
+        }
+
+        return results;
+    }
+}
+
+
     What this code does
     
     Connects using endpoint URI + primary key
+        🔍 Where to get endpoint URI + primary key (Step-by-step)
+                Go to Azure Portal
+                Open your Cosmos DB account
+                Left panel → Keys
+                Copy the PRIMARY KEY
+                Copy the URI
+
     CreateDatabaseIfNotExistsAsync – creates DemoDatabase if missing
     CreateContainerIfNotExistsAsync – creates TodoItems container with partition key /Category
     Inserts 4 TodoItem documents
@@ -186,20 +198,26 @@ In the Basics tab:
     From the project folder:
     dotnet run
     
-    You should see output like:
-    Azure Cosmos DB .NET Console Demo
-    Connecting...
-    ✅ Database ready: DemoDatabase
-    ✅ Container ready: TodoItems
-    Inserting sample items...
-       Inserted item with id: ... RU charge: 5.5
-       ...
-    Reading items back from container...
-    📦 Items in container:
-    - 0c9a... | Learn Azure Fundamentals | New | Learning
-    - ...
-    
-    ✅ Total records in container: 4
+You should see output like:
+
+        Azure Cosmos DB .NET Console Demo
+        Connecting...
+         Database ready: DemoDatabase
+         Container ready: TodoItems
+        Inserting sample items...
+           Inserted item with id: c5cbac4e-5555-442e-a72f-d8660a39b4ab, RU charge: 6.67
+           Inserted item with id: 370d259a-0dd9-4776-94d3-94452182a0d9, RU charge: 6.67
+           Inserted item with id: b6691ad5-8e01-4068-bece-853dbbe3636c, RU charge: 6.67
+           Inserted item with id: 8e91d08c-4828-4696-a8ce-b1bdada560c6, RU charge: 6.67
+        Reading items back from container...
+        
+        Items in container:
+        - c5cbac4e-5555-442e-a72f-d8660a39b4ab | Learn Azure Fundamentals | New | Learning
+        - 370d259a-0dd9-4776-94d3-94452182a0d9 | Build Cosmos DB console app | InProgress | Coding
+        - b6691ad5-8e01-4068-bece-853dbbe3636c | Prepare for AZ-900 | New | Learning
+        - 8e91d08c-4828-4696-a8ce-b1bdada560c6 | Prepare for AZ-204 | New | Learning
+        
+         Total records in container: 4
 
 9. Verify Data in Azure Portal (Data Explorer)
 
